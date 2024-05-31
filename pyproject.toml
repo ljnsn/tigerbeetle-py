@@ -1,0 +1,21 @@
+[project]
+authors = [{ name = "ljnsn", email = "info@ljnsn.com" }]
+requires-python = "<4.0,>=3.10"
+dependencies = ["cffi>=1.16.0"]
+name = "tigerbeetle-py"
+version = "0.1.0"
+description = "TigerBeetle Python Client"
+
+[tool.pdm.dev-dependencies]
+dev = ["ipdb>=0.13.13", "ruff>=0.4.6"]
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.build]
+run-setuptools = true
+
+
+[build-system]
+requires = ["pdm-backend", "setuptools", "cffi>=1.0.0"]
+build-backend = "pdm.backend"
