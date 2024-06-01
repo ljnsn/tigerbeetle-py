@@ -24,6 +24,9 @@ package-dir = "src"
 run-setuptools = true
 source-includes = ["build.py"]
 
+[tool.pytest.ini_options]
+markers = ["slow: mark test as slow"]
+
 
 [build-system]
 requires = ["pdm-backend", "setuptools", "cffi>=1.0.0"]
