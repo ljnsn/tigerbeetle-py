@@ -1,0 +1,16 @@
+services:
+  tigerbeetle:
+    image: "ghcr.io/tigerbeetle/tigerbeetle:0.15.3"
+    restart: unless-stopped
+    volumes:
+      - ./data/tb0:/data
+    command: "start --addresses=0.0.0.0:3033 /data/0_0.tigerbeetle"
+    healthcheck:
+      test: "netstat -an | grep 3033 > /dev/null; if [ 0 != $? ]; then exit 1; fi;"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    ports:
+      - "3033:3033"
+    security_opt:
+      - seccomp:unconfined
