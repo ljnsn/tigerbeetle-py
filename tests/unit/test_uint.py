@@ -9,12 +9,12 @@ from tigerbeetle_py import uint
     name="uint_cls",
     params=(uint.UInt16, uint.UInt32, uint.UInt64, uint.UInt128),
 )
-def _uint_cls(request) -> uint.UInt:
+def _uint_cls(request: pytest.FixtureRequest) -> uint.UInt:
     return request.param
 
 
 @pytest.fixture(name="value", params=(0, "max"))
-def _value(request, uint_cls: uint.UInt) -> int:
+def _value(request: pytest.FixtureRequest, uint_cls: uint.UInt) -> int:
     if request.param == "max":
         return (1 << uint_cls.max_bits) - 1
     return request.param
