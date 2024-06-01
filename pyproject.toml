@@ -13,7 +13,9 @@ dev = ["ipdb>=0.13.13", "ruff>=0.4.6"]
 distribution = true
 
 [tool.pdm.build]
+package-dir = "src"
 run-setuptools = true
+includes = ["build.py"]
 
 
 [build-system]
