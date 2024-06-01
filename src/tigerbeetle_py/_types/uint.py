@@ -98,17 +98,6 @@ class UInt:
             return self.__class__(self.int * int(other))
         return NotImplemented
 
-    def __div__(self, other: object) -> "UInt":
-        if isinstance(other, UInt):
-            return self.__class__(self.int / other.int)
-        if isinstance(other, (bytes, memoryview)):
-            return self.__class__(self.int / _bytes_to_int(other))
-        if isinstance(other, int):
-            return self.__class__(self.int / other)
-        if isinstance(other, str):
-            return self.__class__(self.int / int(other))
-        return NotImplemented
-
     def __divmod__(self, other: object) -> tuple["UInt", "UInt"]:
         if isinstance(other, UInt):
             return self.__class__(self.int // other.int), self.__class__(
@@ -326,7 +315,7 @@ class UInt:
     @classmethod
     def from_bytes(cls, b: Buffer) -> "UInt":
         if not isinstance(b, Buffer):
-            raise TypeError("b must be bytes or memoryview")
+            raise TypeError("b must be bytes, bytearray or memoryview")
         if len(b) != cls.n_bytes:
             msg = f"b must be {cls.n_bytes} bytes, got {len(b)}"
             raise ValueError(msg)
