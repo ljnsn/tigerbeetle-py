@@ -18,7 +18,7 @@ def get_sys_info():
 
 this_dir = Path().parent.absolute()
 lib_dir = this_dir.joinpath("lib", get_sys_info())
-h_file = this_dir.joinpath("src", "tigerbeetle_py", "native", "tb_client.h")
+h_file = this_dir.joinpath("src", "tigerbeetle_py", "_native", "tb_client.h")
 
 ffibuilder = cffi.FFI()
 
@@ -34,7 +34,7 @@ extern "Python" void on_completion_fn(uintptr_t, tb_client_t, tb_packet_t*, cons
 ffibuilder.cdef(defs)
 
 ffibuilder.set_source(
-    "tigerbeetle_py.native._tb_client",
+    "tigerbeetle_py._native.tb_client",
     c_header,
     libraries=["tb_client"],
     library_dirs=[lib_dir.as_posix()],

@@ -5,10 +5,10 @@ import uuid
 from dataclasses import dataclass
 
 from tigerbeetle_py._types import bindings, errors, uint
-from tigerbeetle_py.native import _tb_client
+from tigerbeetle_py._native import tb_client
 
-ffi = _tb_client.ffi
-lib = _tb_client.lib
+ffi = tb_client.ffi
+lib = tb_client.lib
 
 
 @dataclass(slots=True)

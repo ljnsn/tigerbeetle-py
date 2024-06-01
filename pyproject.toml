@@ -15,7 +15,7 @@ distribution = true
 [tool.pdm.build]
 package-dir = "src"
 run-setuptools = true
-includes = ["build.py"]
+source-includes = ["build.py"]
 
 
 [build-system]
