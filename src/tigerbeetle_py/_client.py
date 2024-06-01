@@ -89,9 +89,9 @@ class Client:
     def close(self) -> None:
         print("closing client")
         if self._tb_client is not None:
-            lib.tb_client_deinit(self._tb_client[0])
-            del self.completion_mapping[self._tb_client[0]]
+            client = self.completion_mapping.pop(self._tb_client[0])
             self._tb_client = None
+            lib.tb_client_deinit(client[0])
 
     def create_accounts(
         self,

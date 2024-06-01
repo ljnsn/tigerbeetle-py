@@ -321,6 +321,15 @@ class UInt:
         return self.high, self.low
 
     @classmethod
+    def from_bytes(cls, b: bytes) -> "UInt":
+        if not isinstance(b, (bytes, memoryview)):
+            raise TypeError("b must be bytes or memoryview")
+        if len(b) != cls.n_bytes:
+            msg = f"b must be {cls.n_bytes} bytes, got {len(b)}"
+            raise ValueError(msg)
+        return cls(_bytes_to_int(b))
+
+    @classmethod
     def from_tuple(cls, high: int, low: int) -> "UInt":
         if not isinstance(high, int):
             raise TypeError("high must be an integer")

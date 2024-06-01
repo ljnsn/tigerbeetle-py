@@ -1,25 +1,10 @@
-"""TB client helpers."""
+"""Unique monotolically increasing ID."""
 
 import os
 import threading
 import time
 
-
-def to_uint128(x: int) -> tuple[int, int]:
-    b = f"{x:0>128b}"
-    assert len(b) == 128, f"expected 128 bits, got {len(b)}"
-    return int(b[:64], 2), int(b[64:], 2)
-
-
-def from_uint128(high: int, low: int) -> int:
-    mask = 1 << 64
-    if high == 0 and low == 0:
-        return 0
-    if high < 0:
-        high = high + mask
-    if low < 0:
-        low = low + mask
-    return low + high * mask
+from tigerbeetle_py._types.uint import UInt128
 
 
 ID_LAST_TIMESTAMP = 0
@@ -27,7 +12,7 @@ ID_LAST_RANDOM = bytearray(10)
 ID_MUTEX = threading.Lock()
 
 
-def ID() -> int:
+def ID() -> UInt128:
     """
     Generate a Universally Unique and Sortable Identifier based on https://github.com/ulid/spec.
 
@@ -80,4 +65,4 @@ def ID() -> int:
     _ulid[8:10] = random_hi.to_bytes(2, "little")
     _ulid[10:12] = int(timestamp_bin[-16:], 2).to_bytes(2, "little")
     _ulid[12:] = (timestamp >> 16).to_bytes(4, "little")
-    return int.from_bytes(ulid, "little")
+    return UInt128.from_bytes(ulid)
