@@ -1,10 +1,11 @@
 """Python client for TigerBeetle."""
 
 import threading
+import uuid
 from dataclasses import dataclass
 
-from tb_client import bindings, errors, helpers
-from tb_client.native import _tb_client
+from tigerbeetle_py._types import bindings, errors, uint
+from tigerbeetle_py.native import _tb_client
 
 ffi = _tb_client.ffi
 lib = _tb_client.lib
@@ -31,8 +32,8 @@ def on_completion_fn(context, client, packet, result_ptr, result_len):
     client._on_completion_fn(context, client, packet, result_ptr, result_len)
 
 
-def cint128_to_int(x: ffi.CData) -> int:
-    return helpers.from_uint128(x.high, x.low)
+def cint128_to_int(x: ffi.CData) -> uint.UInt128:
+    return uint.UInt128.from_tuple(x.high, x.low)
 
 
 # TODO: ensure endianness is correct
@@ -51,7 +52,7 @@ class Client:
         addresses_raw = ",".join(addresses).encode()
         status = lib.tb_client_init(
             self._tb_client,
-            helpers.to_uint128(cluster_id),
+            uint.UInt128(cluster_id).tuple,
             ffi.new("char[]", addresses_raw),
             len(addresses_raw),
             concurrency_max,
@@ -94,12 +95,12 @@ class Client:
 
     def create_accounts(
         self,
-        accounts: list[dict],
+        accounts: list[bindings.Account],
     ) -> list[bindings.CreateAccountsResult]:
         """Create accounts in the ledger.
 
         Args:
-            accounts: List of account dictionaries.
+            accounts: List of accounts to create.
 
         Returns:
             List of account creation results.
@@ -109,15 +110,13 @@ class Client:
 
         batch = ffi.new("tb_account_t[]", count)
         for idx, account in enumerate(accounts):
-            batch[idx].id = helpers.to_uint128(account["id"])
-            batch[idx].ledger = account["ledger"]
-            batch[idx].code = account["code"]
-            batch[idx].flags = account.get("flags", 0)
-            batch[idx].user_data_128 = helpers.to_uint128(
-                account.get("user_data_128", 0)
-            )
-            batch[idx].user_data_64 = account.get("user_data_64", 0)
-            batch[idx].user_data_32 = account.get("user_data_32", 0)
+            batch[idx].id = account.id.tuple
+            batch[idx].ledger = account.ledger.int
+            batch[idx].code = account.code.int
+            batch[idx].flags = account.flags.int
+            batch[idx].user_data_128 = account.user_data_128.tuple
+            batch[idx].user_data_64 = account.user_data_64.int
+            batch[idx].user_data_32 = account.user_data_32.int
             batch[idx].timestamp = 0
 
         wrote = self._do_request(
@@ -139,12 +138,12 @@ class Client:
 
     def create_transfers(
         self,
-        transfers: list[dict],
+        transfers: list[bindings.Transfer],
     ) -> list[bindings.CreateTransfersResult]:
         """Create transfers in the ledger.
 
         Args:
-            transfers: List of transfer dictionaries.
+            transfers: List of transfers to create.
 
         Returns:
             List of transfer creation results.
@@ -154,24 +153,18 @@ class Client:
 
         batch = ffi.new("tb_transfer_t[]", count)
         for idx, transfer in enumerate(transfers):
-            batch[idx].id = helpers.to_uint128(transfer["id"])
-            batch[idx].debit_account_id = helpers.to_uint128(
-                transfer["debit_account_id"]
-            )
-            batch[idx].credit_account_id = helpers.to_uint128(
-                transfer["credit_account_id"]
-            )
-            batch[idx].amount = helpers.to_uint128(transfer["amount"])
-            batch[idx].pending_id = helpers.to_uint128(transfer.get("pending_id", 0))
-            batch[idx].user_data_128 = helpers.to_uint128(
-                transfer.get("user_data_128", 0)
-            )
-            batch[idx].user_data_64 = transfer.get("user_data_64", 0)
-            batch[idx].user_data_32 = transfer.get("user_data_32", 0)
-            batch[idx].timeout = transfer.get("timeout", 0)
-            batch[idx].ledger = transfer["ledger"]
-            batch[idx].code = transfer["code"]
-            batch[idx].flags = transfer.get("flags", 0)
+            batch[idx].id = transfer.id.tuple
+            batch[idx].debit_account_id = transfer.debit_account_id.tuple
+            batch[idx].credit_account_id = transfer.credit_account_id.tuple
+            batch[idx].amount = transfer.amount.tuple
+            batch[idx].pending_id = transfer.pending_id.tuple
+            batch[idx].user_data_128 = transfer.user_data_128.tuple
+            batch[idx].user_data_64 = transfer.user_data_64.int
+            batch[idx].user_data_32 = transfer.user_data_32.int
+            batch[idx].timeout = transfer.timeout.int
+            batch[idx].ledger = transfer.ledger.int
+            batch[idx].code = transfer.code.int
+            batch[idx].flags = transfer.flags.int
             batch[idx].timestamp = 0
 
         wrote = self._do_request(
@@ -191,7 +184,10 @@ class Client:
             for result in results
         ]
 
-    def lookup_accounts(self, account_ids: list[int]) -> list[bindings.Account]:
+    def lookup_accounts(
+        self,
+        account_ids: list[uint.UInt128],
+    ) -> list[bindings.Account]:
         """Lookup accounts in the ledger.
 
         Args:
@@ -203,7 +199,7 @@ class Client:
         count = len(account_ids)
         results = ffi.new("tb_account_t[]", count)
 
-        batch = ffi.new("tb_uint128_t[]", [helpers.to_uint128(i) for i in account_ids])
+        batch = ffi.new("tb_uint128_t[]", [i.tuple for i in account_ids])
 
         wrote = self._do_request(
             bindings.Operation.LOOKUP_ACCOUNTS,
@@ -222,18 +218,21 @@ class Client:
                 credits_pending=cint128_to_int(result.credits_pending),
                 credits_posted=cint128_to_int(result.credits_posted),
                 user_data_128=cint128_to_int(result.user_data_128),
-                user_data_64=result.user_data_64,
-                user_data_32=result.user_data_32,
-                ledger=result.ledger,
-                code=result.code,
-                flags=result.flags,
-                timestamp=result.timestamp,
+                user_data_64=uint.UInt64(result.user_data_64),
+                user_data_32=uint.UInt32(result.user_data_32),
+                ledger=uint.UInt32(result.ledger),
+                code=uint.UInt16(result.code),
+                flags=uint.UInt16(result.flags),
+                timestamp=uint.UInt64(result.timestamp),
                 reserved=result.reserved,
             )
             for result in results[0:result_count]
         ]
 
-    def lookup_transfers(self, transfer_ids: list[int]) -> list[bindings.Transfer]:
+    def lookup_transfers(
+        self,
+        transfer_ids: list[uint.UInt128],
+    ) -> list[bindings.Transfer]:
         """Lookup transfers in the ledger.
 
         Args:
@@ -245,7 +244,7 @@ class Client:
         count = len(transfer_ids)
         results = ffi.new("tb_transfer_t[]", count)
 
-        batch = ffi.new("tb_uint128_t[]", [helpers.to_uint128(i) for i in transfer_ids])
+        batch = ffi.new("tb_uint128_t[]", [i.tuple for i in transfer_ids])
 
         wrote = self._do_request(
             bindings.Operation.LOOKUP_TRANSFERS,
@@ -265,18 +264,21 @@ class Client:
                 amount=cint128_to_int(result.amount),
                 pending_id=cint128_to_int(result.pending_id),
                 user_data_128=cint128_to_int(result.user_data_128),
-                user_data_64=result.user_data_64,
-                user_data_32=result.user_data_32,
-                timeout=result.timeout,
-                ledger=result.ledger,
-                code=result.code,
-                flags=result.flags,
-                timestamp=result.timestamp,
+                user_data_64=uint.UInt64(result.user_data_64),
+                user_data_32=uint.UInt32(result.user_data_32),
+                timeout=uint.UInt32(result.timeout),
+                ledger=uint.UInt32(result.ledger),
+                code=uint.UInt16(result.code),
+                flags=uint.UInt16(result.flags),
+                timestamp=uint.UInt64(result.timestamp),
             )
             for result in results[0:result_count]
         ]
 
-    def get_account_transfers(self, filters: list[dict]) -> list[bindings.Transfer]:
+    def get_account_transfers(
+        self,
+        filters: list[bindings.AccountFilter],
+    ) -> list[bindings.Transfer]:
         """Get transfers for an account.
 
         Args:
@@ -286,17 +288,17 @@ class Client:
             List of transfers.
         """
         # NOTE: isn't limit required and we can use that?
-        count = sum(_filter.get("limit", 10) for _filter in filters)
+        count = sum(_filter.limit for _filter in filters)
         results = ffi.new("tb_transfer_t[]", count)
 
         batch = ffi.new("tb_account_filter_t[]", count)
 
         for idx, filter in enumerate(filters):
-            batch[idx].account_id = helpers.to_uint128(filter["id"])
-            batch[idx].timestamp_min = filter.get("timestamp_min", 0)
-            batch[idx].timestamp_max = filter.get("timestamp_max", 0)
-            batch[idx].limit = filter.get("limit", 10)
-            batch[idx].flags = filter.get("flags", 0)
+            batch[idx].account_id = filter.id.tuple
+            batch[idx].timestamp_min = filter.timestamp_min.int
+            batch[idx].timestamp_max = filter.timestamp_max.int
+            batch[idx].limit = filter.limit.int
+            batch[idx].flags = filter.flags.int
 
         wrote = self._do_request(
             bindings.Operation.GET_ACCOUNT_TRANSFERS,
@@ -316,20 +318,20 @@ class Client:
                 amount=cint128_to_int(result.amount),
                 pending_id=cint128_to_int(result.pending_id),
                 user_data_128=cint128_to_int(result.user_data_128),
-                user_data_64=result.user_data_64,
-                user_data_32=result.user_data_32,
-                timeout=result.timeout,
-                ledger=result.ledger,
-                code=result.code,
-                flags=result.flags,
-                timestamp=result.timestamp,
+                user_data_64=uint.UInt64(result.user_data_64),
+                user_data_32=uint.UInt32(result.user_data_32),
+                timeout=uint.UInt32(result.timeout),
+                ledger=uint.UInt32(result.ledger),
+                code=uint.UInt16(result.code),
+                flags=uint.UInt16(result.flags),
+                timestamp=uint.UInt64(result.timestamp),
             )
             for result in results[0:result_count]
         ]
 
     def get_account_balances(
         self,
-        filters: list[dict],
+        filters: list[bindings.AccountFilter],
     ) -> list[bindings.AccountBalance]:
         """Get balances for an account.
 
@@ -339,16 +341,16 @@ class Client:
         Returns:
             List of account balances.
         """
-        count = sum(_filter.get("limit", 10) for _filter in filters)
+        count = sum(_filter.limit for _filter in filters)
         results = ffi.new("tb_account_balance_t[]", count)
 
         batch = ffi.new("tb_account_filter_t[]", count)
         for idx, filter in enumerate(filters):
-            batch[idx].account_id = helpers.to_uint128(filter["id"])
-            batch[idx].timestamp_min = filter.get("timestamp_min", 0)
-            batch[idx].timestamp_max = filter.get("timestamp_max", 0)
-            batch[idx].limit = filter.get("limit", 10)
-            batch[idx].flags = filter.get("flags", 0)
+            batch[idx].account_id = filter.id.tuple
+            batch[idx].timestamp_min = filter.timestamp_min.int
+            batch[idx].timestamp_max = filter.timestamp_max.int
+            batch[idx].limit = filter.limit.int
+            batch[idx].flags = filter.flags.int
 
         wrote = self._do_request(
             bindings.Operation.GET_ACCOUNT_BALANCES,
@@ -366,7 +368,7 @@ class Client:
                 debits_posted=cint128_to_int(result.debits_posted),
                 credits_pending=cint128_to_int(result.credits_pending),
                 credits_posted=cint128_to_int(result.credits_posted),
-                timestamp=result.timestamp,
+                timestamp=uint.UInt64(result.timestamp),
             )
             for result in results[0:result_count]
         ]
@@ -386,7 +388,7 @@ class Client:
             raise errors.ClientClosedError()
 
         req = Request(
-            id=0,
+            id=uuid.uuid4().int & 0x7FFFFFFF,
             packet=ffi.new("tb_packet_t *"),
             result=result,
             ready=threading.Event(),
@@ -461,8 +463,8 @@ class Client:
                 raise Exception("Invalid result length")
 
             if (
-                op.value != lib.TB_OPERATION_GET_ACCOUNT_TRANSFERS
-                and op.value != lib.TB_OPERATION_GET_ACCOUNT_BALANCES
+                op != lib.TB_OPERATION_GET_ACCOUNT_TRANSFERS
+                and op != lib.TB_OPERATION_GET_ACCOUNT_BALANCES
             ):
                 # Make sure the amount of results at least matches the amount of requests.
                 count = packet.data_size // get_event_size(op)
@@ -485,7 +487,7 @@ def get_event_size(op: bindings.Operation) -> int:
         lib.TB_OPERATION_LOOKUP_TRANSFERS: ffi.sizeof("tb_uint128_t"),
         lib.TB_OPERATION_GET_ACCOUNT_TRANSFERS: ffi.sizeof("tb_account_filter_t"),
         lib.TB_OPERATION_GET_ACCOUNT_BALANCES: ffi.sizeof("tb_account_filter_t"),
-    }.get(op.value, 0)
+    }.get(op, 0)
 
 
 def get_result_size(op: bindings.Operation) -> int:
@@ -496,4 +498,4 @@ def get_result_size(op: bindings.Operation) -> int:
         lib.TB_OPERATION_LOOKUP_TRANSFERS: ffi.sizeof("tb_transfer_t"),
         lib.TB_OPERATION_GET_ACCOUNT_TRANSFERS: ffi.sizeof("tb_account_t"),
         lib.TB_OPERATION_GET_ACCOUNT_BALANCES: ffi.sizeof("tb_account_balance_t"),
-    }.get(op.value, 0)
+    }.get(op, 0)
