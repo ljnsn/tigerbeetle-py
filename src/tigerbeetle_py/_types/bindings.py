@@ -76,7 +76,7 @@ class AccountFilterFlags:
         )
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class Account:
     """See [Account](https://docs.tigerbeetle.com/reference/account/#)"""
 
@@ -117,7 +117,7 @@ class Account:
         )
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class Transfer:
     """See [Transfer](https://docs.tigerbeetle.com/reference/transfer/#)"""
 
@@ -127,25 +127,25 @@ class Transfer:
     """See [debit_account_id](https://docs.tigerbeetle.com/reference/transfer/#debit_account_id)"""
     credit_account_id: uint.UInt128
     """See [credit_account_id](https://docs.tigerbeetle.com/reference/transfer/#credit_account_id)"""
-    amouid: uint.UInt128
+    amount: uint.UInt128
     """See [amount](https://docs.tigerbeetle.com/reference/transfer/#amount)"""
-    pending_id: uint.UInt128
-    """See [pending_id](https://docs.tigerbeetle.com/reference/transfer/#pending_id)"""
-    user_data_128: uint.UInt128
-    """See [user_data_128](https://docs.tigerbeetle.com/reference/transfer/#user_data_128)"""
-    user_data_64: uint.UInt64
-    """See [user_data_64](https://docs.tigerbeetle.com/reference/transfer/#user_data_64)"""
-    user_data_32: uint.UInt32
-    """See [user_data_32](https://docs.tigerbeetle.com/reference/transfer/#user_data_32)"""
-    timeout: uint.UInt32
-    """See [timeout](https://docs.tigerbeetle.com/reference/transfer/#timeout)"""
     ledger: uint.UInt32
     """See [ledger](https://docs.tigerbeetle.com/reference/transfer/#ledger)"""
     code: uint.UInt16
     """See [code](https://docs.tigerbeetle.com/reference/transfer/#code)"""
-    flags: uint.UInt16
+    pending_id: uint.UInt128 = uint.UInt128(0)
+    """See [pending_id](https://docs.tigerbeetle.com/reference/transfer/#pending_id)"""
+    user_data_128: uint.UInt128 = uint.UInt128(0)
+    """See [user_data_128](https://docs.tigerbeetle.com/reference/transfer/#user_data_128)"""
+    user_data_64: uint.UInt64 = uint.UInt64(0)
+    """See [user_data_64](https://docs.tigerbeetle.com/reference/transfer/#user_data_64)"""
+    user_data_32: uint.UInt32 = uint.UInt32(0)
+    """See [user_data_32](https://docs.tigerbeetle.com/reference/transfer/#user_data_32)"""
+    timeout: uint.UInt32 = uint.UInt32(0)
+    """See [timeout](https://docs.tigerbeetle.com/reference/transfer/#timeout)"""
+    flags: uint.UInt16 = TransferFlags().to_uint16()
     """See [flags](https://docs.tigerbeetle.com/reference/transfer/#flags)"""
-    timestamp: uint.UInt64
+    timestamp: uint.UInt64 = uint.UInt64(0)
     """See [timestamp](https://docs.tigerbeetle.com/reference/transfer/#timestamp)"""
 
     def get_flags(self) -> TransferFlags:
@@ -326,7 +326,7 @@ class CreateTransferResult(enum.IntEnum):
     """See [exceeds_debits](https://docs.tigerbeetle.com/reference/requests/create_transfers#exceeds_debits)"""
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class CreateAccountsResult:
     """Create accounts result."""
 
@@ -334,7 +334,7 @@ class CreateAccountsResult:
     result: CreateAccountResult
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class CreateTransfersResult:
     """Create transfers result."""
 
@@ -342,19 +342,19 @@ class CreateTransfersResult:
     result: CreateTransferResult
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class AccountFilter:
     """See [AccountFilter](https://docs.tigerbeetle.com/reference/account-filter#)"""
 
     account_id: uint.UInt128
     """See [account_id](https://docs.tigerbeetle.com/reference/account-filter#account_id)"""
-    timestamp_min: uint.UInt64
+    timestamp_min: uint.UInt64 = uint.UInt64(0)
     """See [timestamp_min](https://docs.tigerbeetle.com/reference/account-filter#timestamp_min)"""
-    timestamp_max: uint.UInt64
+    timestamp_max: uint.UInt64 = uint.UInt64(0)
     """See [timestamp_max](https://docs.tigerbeetle.com/reference/account-filter#timestamp_max)"""
-    limit: uint.UInt32
+    limit: uint.UInt32 = uint.UInt32(100)
     """See [limit](https://docs.tigerbeetle.com/reference/account-filter#limit)"""
-    flags: uint.UInt32
+    flags: uint.UInt32 = AccountFilterFlags().to_uint32()
     """See [flags](https://docs.tigerbeetle.com/reference/account-filter#flags)"""
 
     def get_flags(self) -> AccountFilterFlags:
@@ -366,7 +366,7 @@ class AccountFilter:
         )
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class AccountBalance:
     """See [AccountBalance](https://docs.tigerbeetle.com/reference/account-balances#)"""
 

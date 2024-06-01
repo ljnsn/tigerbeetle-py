@@ -1,11 +1,13 @@
 """Unsigned integer."""
 
+Buffer = bytes | bytearray | memoryview
+
 
 def _int_to_bytes(n: int, length: int) -> bytes:
     return n.to_bytes(length, "little")
 
 
-def _bytes_to_int(b: bytes) -> int:
+def _bytes_to_int(b: Buffer) -> int:
     return int.from_bytes(b, "little")
 
 
@@ -284,9 +286,10 @@ class UInt:
     def __bool__(self) -> bool:
         return bool(self.int)
 
+    @classmethod
     @property
-    def n_bytes(self) -> int:
-        return self.max_bits // 8
+    def n_bytes(cls) -> int:
+        return cls.max_bits // 8
 
     @property
     def high(self) -> int:
@@ -321,8 +324,8 @@ class UInt:
         return self.high, self.low
 
     @classmethod
-    def from_bytes(cls, b: bytes) -> "UInt":
-        if not isinstance(b, (bytes, memoryview)):
+    def from_bytes(cls, b: Buffer) -> "UInt":
+        if not isinstance(b, Buffer):
             raise TypeError("b must be bytes or memoryview")
         if len(b) != cls.n_bytes:
             msg = f"b must be {cls.n_bytes} bytes, got {len(b)}"
