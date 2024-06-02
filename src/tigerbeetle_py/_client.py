@@ -26,7 +26,7 @@ def on_completion_fn(context, client, packet, result_ptr, result_len):
     called for any callbacks, looks up the respective client from our
     global mapping, and forwards on the callback.
 
-    NB: This runs in the Zig's client thread.
+    NB: This runs in the Zig client thread.
     """
     client = Client.completion_mapping[client]
     client._on_completion_fn(context, client, packet, result_ptr, result_len)
@@ -44,7 +44,7 @@ class Client:
 
     def __init__(
         self,
-        cluster_id: int,
+        cluster_id: uint.UInt128,
         addresses: list[str],
         concurrency_max: int,
     ) -> None:
@@ -52,7 +52,7 @@ class Client:
         addresses_raw = ",".join(addresses).encode()
         status = lib.tb_client_init(
             self._tb_client,
-            uint.UInt128(cluster_id).tuple,
+            cluster_id.tuple,
             ffi.new("char[]", addresses_raw),
             len(addresses_raw),
             concurrency_max,
