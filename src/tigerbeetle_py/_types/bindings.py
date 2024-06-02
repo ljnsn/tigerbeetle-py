@@ -92,7 +92,7 @@ class Account:
     """See [debits_posted](https://docs.tigerbeetle.com/reference/account/#debits_posted)"""
     credits_pending: uint.UInt128 = uint.UInt128(0)
     """See [credits_pending](https://docs.tigerbeetle.com/reference/account/#credits_pending)"""
-    credits_pending: uint.UInt128 = uint.UInt128(0)
+    credits_posted: uint.UInt128 = uint.UInt128(0)
     """See [credits_posted](https://docs.tigerbeetle.com/reference/account/#credits_posted)"""
     user_data_128: uint.UInt128 = uint.UInt128(0)
     """See [user_data_128](https://docs.tigerbeetle.com/reference/account/#user_data_128)"""
