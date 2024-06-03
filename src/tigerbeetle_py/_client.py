@@ -4,6 +4,7 @@ import threading
 import uuid
 from dataclasses import dataclass
 from types import TracebackType
+from typing import ClassVar
 
 from tigerbeetle_py._native import tb_client
 from tigerbeetle_py._types import bindings, errors, uint
@@ -44,8 +45,44 @@ def on_completion_fn(context, client, packet, result_ptr, result_len):
 
     NB: This runs in the Zig client thread.
     """
-    client = Client.completion_mapping[client]
-    client._on_completion_fn(context, client, packet, result_ptr, result_len)
+    # client = Client.completion_mapping[client]
+    _on_completion_fn(context, client, packet, result_ptr, result_len)
+
+
+def _on_completion_fn(
+    context: ffi.CData,
+    client: ffi.CData,
+    packet: ffi.CData,
+    result_ptr: ffi.CData,
+    result_len: ffi.CData,
+) -> None:
+    print("request complete")
+    req = Client.inflight[int(ffi.cast("int", packet[0].user_data))]
+    if req.packet != packet:
+        raise Exception("Packet mismatch")
+
+    wrote = 0
+    if result_len > 0 and result_ptr is not None:
+        op = bindings.Operation(int(packet.operation))
+        result_size = get_result_size(op)
+        if result_len % result_size != 0:
+            raise Exception("Invalid result length")
+
+        if (
+            op != lib.TB_OPERATION_GET_ACCOUNT_TRANSFERS
+            and op != lib.TB_OPERATION_GET_ACCOUNT_BALANCES
+        ):
+            # Make sure the amount of results at least matches the amount of requests.
+            count = packet.data_size // get_event_size(op)
+            if count * result_size < result_len:
+                raise Exception("Invalid result length")
+
+        if req.result is not None:
+            wrote = result_len
+            ffi.memmove(req.result, result_ptr, wrote)
+
+    req.packet.data_size = wrote
+    req.ready.set()
 
 
 def cint128_to_int(x: ffi.CData) -> uint.UInt128:
@@ -56,7 +93,7 @@ def cint128_to_int(x: ffi.CData) -> uint.UInt128:
 class Client:
     """Client for TigerBeetle."""
 
-    completion_mapping = {}
+    inflight: ClassVar[dict[int, Request]] = {}
 
     def __init__(
         self,
@@ -78,9 +115,6 @@ class Client:
 
         if status != lib.TB_STATUS_SUCCESS:
             self._raise_status(status)
-
-        self.completion_mapping[self._tb_client[0]] = self
-        self.inflight = {}
 
     def _raise_status(self, status: int) -> None:
         match status:
@@ -105,8 +139,6 @@ class Client:
     def close(self) -> None:
         print("closing client")
         if self._tb_client is not None:
-            self.inflight.clear()
-            del self.completion_mapping[self._tb_client[0]]
             lib.tb_client_deinit(self._tb_client[0])
             self._tb_client = None
 
@@ -423,7 +455,6 @@ class Client:
             raise errors.TigerBeetleError("Unexpected None packet")
 
         print("status", status)
-        lib.tb_client_release_packet(self._tb_client[0], req.packet)
 
         req.packet.user_data = ffi.cast("void *", req.id)
         req.packet.operation = ffi.cast("TB_OPERATION", op.value)
@@ -431,13 +462,14 @@ class Client:
         req.packet.data_size = count * get_event_size(op)
         req.packet.data = data
 
-        self.inflight[req.id] = req
+        Client.inflight[req.id] = req
 
         # Submit the request.
         lib.tb_client_submit(self._tb_client[0], req.packet)
 
         # Wait for the response
         req.ready.wait()
+        lib.tb_client_release_packet(self._tb_client[0], req.packet)
         status = int(ffi.cast("TB_PACKET_STATUS", req.packet.status))
 
         if status != lib.TB_PACKET_OK:
@@ -458,42 +490,6 @@ class Client:
 
         # Return the amount of bytes written into result
         return int(req.packet.data_size)
-
-    def _on_completion_fn(
-        self,
-        context: ffi.CData,
-        client: ffi.CData,
-        packet: ffi.CData,
-        result_ptr: ffi.CData,
-        result_len: ffi.CData,
-    ) -> None:
-        print("request complete")
-        req = self.inflight[int(ffi.cast("int", packet[0].user_data))]
-        if req.packet != packet:
-            raise Exception("Packet mismatch")
-
-        wrote = 0
-        if result_len > 0 and result_ptr is not None:
-            op = bindings.Operation(int(packet.operation))
-            result_size = get_result_size(op)
-            if result_len % result_size != 0:
-                raise Exception("Invalid result length")
-
-            if (
-                op != lib.TB_OPERATION_GET_ACCOUNT_TRANSFERS
-                and op != lib.TB_OPERATION_GET_ACCOUNT_BALANCES
-            ):
-                # Make sure the amount of results at least matches the amount of requests.
-                count = packet.data_size // get_event_size(op)
-                if count * result_size < result_len:
-                    raise Exception("Invalid result length")
-
-            if req.result is not None:
-                wrote = result_len
-                ffi.memmove(req.result, result_ptr, wrote)
-
-        req.packet.data_size = wrote
-        req.ready.set()
 
 
 def get_event_size(op: bindings.Operation) -> int:
