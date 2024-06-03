@@ -89,6 +89,28 @@ def cint128_to_int(x: ffi.CData) -> uint.UInt128:
     return uint.UInt128.from_tuple(x.high, x.low)
 
 
+def get_event_size(op: bindings.Operation) -> int:
+    return {
+        lib.TB_OPERATION_CREATE_ACCOUNTS: ffi.sizeof("tb_account_t"),
+        lib.TB_OPERATION_CREATE_TRANSFERS: ffi.sizeof("tb_transfer_t"),
+        lib.TB_OPERATION_LOOKUP_ACCOUNTS: ffi.sizeof("tb_uint128_t"),
+        lib.TB_OPERATION_LOOKUP_TRANSFERS: ffi.sizeof("tb_uint128_t"),
+        lib.TB_OPERATION_GET_ACCOUNT_TRANSFERS: ffi.sizeof("tb_account_filter_t"),
+        lib.TB_OPERATION_GET_ACCOUNT_BALANCES: ffi.sizeof("tb_account_filter_t"),
+    }.get(op, 0)
+
+
+def get_result_size(op: bindings.Operation) -> int:
+    return {
+        lib.TB_OPERATION_CREATE_ACCOUNTS: ffi.sizeof("tb_create_accounts_result_t"),
+        lib.TB_OPERATION_CREATE_TRANSFERS: ffi.sizeof("tb_create_transfers_result_t"),
+        lib.TB_OPERATION_LOOKUP_ACCOUNTS: ffi.sizeof("tb_account_t"),
+        lib.TB_OPERATION_LOOKUP_TRANSFERS: ffi.sizeof("tb_transfer_t"),
+        lib.TB_OPERATION_GET_ACCOUNT_TRANSFERS: ffi.sizeof("tb_account_t"),
+        lib.TB_OPERATION_GET_ACCOUNT_BALANCES: ffi.sizeof("tb_account_balance_t"),
+    }.get(op, 0)
+
+
 # TODO: ensure endianness is correct
 class Client:
     """Client for TigerBeetle."""
@@ -116,7 +138,8 @@ class Client:
         if status != lib.TB_STATUS_SUCCESS:
             self._raise_status(status)
 
-    def _raise_status(self, status: int) -> None:
+    @staticmethod
+    def _raise_status(status: int) -> None:
         match status:
             case lib.TB_STATUS_UNEXPECTED:
                 raise errors.UnexpectedError()
@@ -135,6 +158,77 @@ class Client:
             case _:
                 msg = f"Unexpected status: {status}"
                 raise errors.TigerBeetleError(msg)
+
+    def _do_request(
+        self,
+        op: bindings.Operation,
+        count: int,
+        data: ffi.CData,
+        result: ffi.CData,
+    ) -> int:
+        print("sending request")
+        if count == 0:
+            raise errors.EmptyBatchError()
+
+        if self._tb_client is None:
+            raise errors.ClientClosedError()
+
+        req = Request(
+            id=uuid.uuid4().int & 0x7FFFFFFF,
+            packet=ffi.new("tb_packet_t *"),
+            result=result,
+            ready=threading.Event(),
+        )
+        print("request", req)
+        status = lib.tb_client_acquire_packet(
+            self._tb_client[0],
+            ffi.new("tb_packet_t * *", req.packet),
+        )
+        if status == lib.TB_STATUS_CONCURRENCY_MAX_INVALID:
+            raise errors.ConcurrencyExceededError()
+        if status == lib.TB_PACKET_ACQUIRE_SHUTDOWN:
+            raise errors.ClientClosedError()
+        if req.packet is None:
+            raise errors.TigerBeetleError("Unexpected None packet")
+
+        print("status", status)
+
+        req.packet.user_data = ffi.cast("void *", req.id)
+        req.packet.operation = ffi.cast("TB_OPERATION", op.value)
+        req.packet.status = lib.TB_PACKET_OK
+        req.packet.data_size = count * get_event_size(op)
+        req.packet.data = data
+
+        Client.inflight[req.id] = req
+
+        # Submit the request.
+        lib.tb_client_submit(self._tb_client[0], req.packet)
+
+        # Wait for the response
+        req.ready.wait()
+
+        # Release packet for other threads to use
+        lib.tb_client_release_packet(self._tb_client[0], req.packet)
+
+        status = int(ffi.cast("TB_PACKET_STATUS", req.packet.status))
+        if status != lib.TB_PACKET_OK:
+            match status:
+                case lib.TB_PACKET_TOO_MUCH_DATA:
+                    raise errors.MaximumBatchSizeExceededError()
+                case lib.TB_PACKET_INVALID_OPERATION:
+                    # we control what lib.TB_OPERATION is given
+                    # but allow an invalid opcode to be passed to emulate a client nop
+                    raise errors.InvalidOperationError()
+                case lib.TB_PACKET_INVALID_DATA_SIZE:
+                    # we control what type of data is given
+                    raise Exception("unreachable")
+                case _:
+                    raise Exception(
+                        "tb_client_submit(): returned packet with invalid status"
+                    )
+
+        # Return the amount of bytes written into result
+        return int(req.packet.data_size)
 
     def close(self) -> None:
         print("closing client")
@@ -421,94 +515,3 @@ class Client:
             )
             for result in results[0:result_count]
         ]
-
-    def _do_request(
-        self,
-        op: bindings.Operation,
-        count: int,
-        data: ffi.CData,
-        result: ffi.CData,
-    ) -> int:
-        print("sending request")
-        if count == 0:
-            raise errors.EmptyBatchError()
-
-        if self._tb_client is None:
-            raise errors.ClientClosedError()
-
-        req = Request(
-            id=uuid.uuid4().int & 0x7FFFFFFF,
-            packet=ffi.new("tb_packet_t *"),
-            result=result,
-            ready=threading.Event(),
-        )
-        print("request", req)
-        status = lib.tb_client_acquire_packet(
-            self._tb_client[0],
-            ffi.new("tb_packet_t * *", req.packet),
-        )
-        if status == lib.TB_STATUS_CONCURRENCY_MAX_INVALID:
-            raise errors.ConcurrencyExceededError()
-        if status == lib.TB_PACKET_ACQUIRE_SHUTDOWN:
-            raise errors.ClientClosedError()
-        if req.packet is None:
-            raise errors.TigerBeetleError("Unexpected None packet")
-
-        print("status", status)
-
-        req.packet.user_data = ffi.cast("void *", req.id)
-        req.packet.operation = ffi.cast("TB_OPERATION", op.value)
-        req.packet.status = lib.TB_PACKET_OK
-        req.packet.data_size = count * get_event_size(op)
-        req.packet.data = data
-
-        Client.inflight[req.id] = req
-
-        # Submit the request.
-        lib.tb_client_submit(self._tb_client[0], req.packet)
-
-        # Wait for the response
-        req.ready.wait()
-        lib.tb_client_release_packet(self._tb_client[0], req.packet)
-        status = int(ffi.cast("TB_PACKET_STATUS", req.packet.status))
-
-        if status != lib.TB_PACKET_OK:
-            match status:
-                case lib.TB_PACKET_TOO_MUCH_DATA:
-                    raise errors.MaximumBatchSizeExceededError()
-                case lib.TB_PACKET_INVALID_OPERATION:
-                    # we control what lib.TB_OPERATION is given
-                    # but allow an invalid opcode to be passed to emulate a client nop
-                    raise errors.InvalidOperationError()
-                case lib.TB_PACKET_INVALID_DATA_SIZE:
-                    # we control what type of data is given
-                    raise Exception("unreachable")
-                case _:
-                    raise Exception(
-                        "tb_client_submit(): returned packet with invalid status"
-                    )
-
-        # Return the amount of bytes written into result
-        return int(req.packet.data_size)
-
-
-def get_event_size(op: bindings.Operation) -> int:
-    return {
-        lib.TB_OPERATION_CREATE_ACCOUNTS: ffi.sizeof("tb_account_t"),
-        lib.TB_OPERATION_CREATE_TRANSFERS: ffi.sizeof("tb_transfer_t"),
-        lib.TB_OPERATION_LOOKUP_ACCOUNTS: ffi.sizeof("tb_uint128_t"),
-        lib.TB_OPERATION_LOOKUP_TRANSFERS: ffi.sizeof("tb_uint128_t"),
-        lib.TB_OPERATION_GET_ACCOUNT_TRANSFERS: ffi.sizeof("tb_account_filter_t"),
-        lib.TB_OPERATION_GET_ACCOUNT_BALANCES: ffi.sizeof("tb_account_filter_t"),
-    }.get(op, 0)
-
-
-def get_result_size(op: bindings.Operation) -> int:
-    return {
-        lib.TB_OPERATION_CREATE_ACCOUNTS: ffi.sizeof("tb_create_accounts_result_t"),
-        lib.TB_OPERATION_CREATE_TRANSFERS: ffi.sizeof("tb_create_transfers_result_t"),
-        lib.TB_OPERATION_LOOKUP_ACCOUNTS: ffi.sizeof("tb_account_t"),
-        lib.TB_OPERATION_LOOKUP_TRANSFERS: ffi.sizeof("tb_transfer_t"),
-        lib.TB_OPERATION_GET_ACCOUNT_TRANSFERS: ffi.sizeof("tb_account_t"),
-        lib.TB_OPERATION_GET_ACCOUNT_BALANCES: ffi.sizeof("tb_account_balance_t"),
-    }.get(op, 0)
