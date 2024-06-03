@@ -3,9 +3,10 @@
 import threading
 import uuid
 from dataclasses import dataclass
+from types import TracebackType
 
-from tigerbeetle_py._types import bindings, errors, uint
 from tigerbeetle_py._native import tb_client
+from tigerbeetle_py._types import bindings, errors, uint
 
 ffi = tb_client.ffi
 lib = tb_client.lib
@@ -19,7 +20,22 @@ class Request:
     ready: threading.Event
 
 
-@ffi.def_extern()
+def handle_exception(
+    exception: type[BaseException],
+    exception_value: BaseException,
+    traceback: TracebackType,
+) -> None:
+    """Handle exceptions raised in the Zig client thread.
+
+    See [1] on why exceptions cannot be propagated there and have to be
+    re-raised here.
+
+    [1]: https://cffi.readthedocs.io/en/latest/using.html#extern-python-reference
+    """
+    raise exception_value.with_traceback(traceback)
+
+
+@ffi.def_extern(onerror=handle_exception)
 def on_completion_fn(context, client, packet, result_ptr, result_len):
     """
     Simple statically registered extern "Python" fn. This gets
