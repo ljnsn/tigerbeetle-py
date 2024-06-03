@@ -11,7 +11,7 @@ from tigerbeetle_py import Client, uint
 @pytest.fixture(scope="session")
 def port() -> int:
     """Return the default port."""
-    return 3003
+    return 3033
 
 
 @pytest.fixture(scope="session")
@@ -87,18 +87,34 @@ def _tigerbeetle(
     cache_size_arg = "--cache-grid=256MiB"
     cmd = [tigerbeetle_cmd, "start", address_arg, cache_size_arg, db_file.as_posix()]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    print("TigerBeetle started")
     yield
+    print("TigerBeetle stopping")
     proc.terminate()
+    # this removes the zombie process
+    proc.poll()
+
+
+# @pytest.fixture(scope="session")
+# def tb_client(
+#     _tigerbeetle: None,
+#     port: int,
+#     cluster_id: uint.UInt128,
+#     concurrency_max: int,
+# ) -> Iterable[Client]:
+#     """Return the default TigerBeetle client."""
+#     client = Client(cluster_id, [str(port)], concurrency_max)
+#     yield client
+#     client.close()
 
 
 @pytest.fixture(scope="session")
 def tb_client(
-    _tigerbeetle: None,
-    port: int,
     cluster_id: uint.UInt128,
+    port: int,
     concurrency_max: int,
 ) -> Iterable[Client]:
     """Return the default TigerBeetle client."""
-    client = Client(cluster_id.int, [str(port)], concurrency_max)
+    client = Client(cluster_id, [str(port)], concurrency_max)
     yield client
     client.close()
