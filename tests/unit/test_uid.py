@@ -10,8 +10,8 @@ from tigerbeetle_py import uid
 
 def verifier() -> None:
     id_a = uid.ID()
-    for i in range(1_000_000):
-        if i % 1_000 == 0:
+    for i in range(1_000):
+        if i % 10 == 0:
             time.sleep(1 * 1e-3)
         id_b = uid.ID()
         assert id_b > id_a

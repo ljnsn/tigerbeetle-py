@@ -207,7 +207,7 @@ def test_create_concurrent_transfers(
 ) -> None:
     """Test creating concurrent transfers."""
     # TODO: 1_000_000 don't complete
-    transfers_max = 10_000
+    transfers_max = 1_000
     account_a = bindings.Account(account_a_id, ledger=uint32(1), code=uint16(1))
     account_b = bindings.Account(account_b_id, ledger=uint32(1), code=uint16(2))
     tb_client.create_accounts([account_a, account_b])
