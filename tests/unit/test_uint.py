@@ -16,7 +16,7 @@ def _uint_cls(request: pytest.FixtureRequest) -> uint.UInt:
 @pytest.fixture(name="value", params=(0, "max"))
 def _value(request: pytest.FixtureRequest, uint_cls: uint.UInt) -> int:
     if request.param == "max":
-        return (1 << uint_cls.max_bits) - 1
+        return (1 << uint_cls.n_bits) - 1
     return request.param
 
 
@@ -35,11 +35,11 @@ def test_init(uint_cls: uint.UInt, value: int) -> None:
         uint_cls(-1)
 
     with pytest.raises(ValueError):
-        uint_cls(1 << uint_cls.max_bits)
+        uint_cls(1 << uint_cls.n_bits)
 
 
 def test_operators(uint_cls: uint.UInt) -> None:
-    v = (1 << uint_cls.max_bits) // 2 - 1
+    v = (1 << uint_cls.n_bits) // 2 - 1
     u = uint_cls(v)
 
     assert u == u
@@ -91,7 +91,7 @@ def test_operators(uint_cls: uint.UInt) -> None:
 
 
 def test_from_bytes(uint_cls: uint.UInt) -> None:
-    v = (1 << uint_cls.max_bits) - 1
+    v = (1 << uint_cls.n_bits) - 1
     u = uint_cls.from_bytes(v.to_bytes(uint_cls.n_bytes, "little"))
 
     assert int.from_bytes(u.memory, "little") == v
@@ -104,10 +104,10 @@ def test_from_bytes(uint_cls: uint.UInt) -> None:
 
 
 def test_from_tuple(uint_cls: uint.UInt) -> None:
-    v = (1 << uint_cls.max_bits) - 1
+    v = (1 << uint_cls.n_bits) - 1
     u = uint_cls.from_tuple(
-        v >> uint_cls.max_bits // 2,
-        v & (1 << uint_cls.max_bits // 2) - 1,
+        v >> uint_cls.n_bits // 2,
+        v & (1 << uint_cls.n_bits // 2) - 1,
     )
 
     assert int.from_bytes(u.memory, "little") == v
@@ -116,4 +116,4 @@ def test_from_tuple(uint_cls: uint.UInt) -> None:
         uint_cls.from_tuple(0, -1)
 
     with pytest.raises(ValueError):
-        uint_cls.from_tuple(1 << uint_cls.max_bits, 0)
+        uint_cls.from_tuple(1 << uint_cls.n_bits, 0)

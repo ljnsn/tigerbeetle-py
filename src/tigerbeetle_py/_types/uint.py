@@ -14,17 +14,17 @@ def _bytes_to_int(b: Buffer) -> int:
 class UInt:
     """Unsigned integer."""
 
-    __slots__ = ("memory", "max_bits")
+    __slots__ = ("memory", "n_bits")
 
-    max_bits: int
+    n_bits: int
 
     def __init__(self, integer: int) -> None:
         if not isinstance(integer, int):
             raise TypeError("integer must be an integer")
         if integer < 0:
             raise ValueError("integer must be non-negative")
-        if integer.bit_length() > self.max_bits:
-            msg = f"integer must be less than 2**{self.max_bits}"
+        if integer.bit_length() > self.n_bits:
+            msg = f"integer must be less than 2**{self.n_bits}"
             raise ValueError(msg)
         self.memory = memoryview(_int_to_bytes(integer, self.n_bytes))
 
@@ -278,7 +278,7 @@ class UInt:
     @classmethod
     @property
     def n_bytes(cls) -> int:
-        return cls.max_bits // 8
+        return cls.n_bits // 8
 
     @property
     def high(self) -> int:
@@ -302,7 +302,7 @@ class UInt:
 
     @property
     def bin(self) -> str:
-        return bin(self.int).lstrip("0b").zfill(self.max_bits)
+        return bin(self.int).lstrip("0b").zfill(self.n_bits)
 
     @property
     def str(self) -> str:
@@ -331,34 +331,34 @@ class UInt:
             raise ValueError("high must be non-negative")
         if low < 0:
             raise ValueError("low must be non-negative")
-        if high.bit_length() > cls.max_bits // 2:
-            msg = f"high must be less than 2**{cls.max_bits // 2}"
+        if high.bit_length() > cls.n_bits // 2:
+            msg = f"high must be less than 2**{cls.n_bits // 2}"
             raise ValueError(msg)
-        if low.bit_length() > cls.max_bits // 2:
-            msg = f"low must be less than 2**{cls.max_bits // 2}"
+        if low.bit_length() > cls.n_bits // 2:
+            msg = f"low must be less than 2**{cls.n_bits // 2}"
             raise ValueError(msg)
-        return cls((high << cls.max_bits // 2) | low)
+        return cls((high << cls.n_bits // 2) | low)
 
 
 class UInt128(UInt):
     """128-bit unsigned integer."""
 
-    max_bits = 128
+    n_bits = 128
 
 
 class UInt64(UInt):
     """64-bit unsigned integer."""
 
-    max_bits = 64
+    n_bits = 64
 
 
 class UInt32(UInt):
     """32-bit unsigned integer."""
 
-    max_bits = 32
+    n_bits = 32
 
 
 class UInt16(UInt):
     """16-bit unsigned integer."""
 
-    max_bits = 16
+    n_bits = 16
