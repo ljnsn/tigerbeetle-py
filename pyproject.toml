@@ -1,10 +1,11 @@
 [project]
-authors = [{ name = "ljnsn", email = "info@ljnsn.com" }]
-requires-python = "<4.0,>=3.10"
-dependencies = ["cffi>=1.16.0"]
 name = "tigerbeetle-py"
 version = "0.1.0"
 description = "TigerBeetle Python Client"
+authors = [{ name = "ljnsn", email = "info@ljnsn.com" }]
+license = "Apache-2.0"
+requires-python = "<4.0,>=3.10"
+dependencies = ["cffi>=1.16.0"]
 
 [tool.pdm.dev-dependencies]
 dev = [
