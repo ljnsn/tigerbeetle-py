@@ -45,7 +45,6 @@ def on_completion_fn(context, client, packet, result_ptr, result_len):
 
     NB: This runs in the Zig client thread.
     """
-    # client = Client.completion_mapping[client]
     _on_completion_fn(context, client, packet, result_ptr, result_len)
 
 
@@ -56,12 +55,10 @@ def _on_completion_fn(
     result_ptr: ffi.CData,
     result_len: ffi.CData,
 ) -> None:
-    print("request complete")
     req = Client.inflight[int(ffi.cast("int", packet[0].user_data))]
     if req.packet != packet:
         raise Exception("Packet mismatch")
 
-    # wrote = 0
     if result_len > 0 and result_ptr is not None:
         op = bindings.Operation(int(packet.operation))
         result_size = get_result_size(op)
@@ -76,10 +73,6 @@ def _on_completion_fn(
             count = packet.data_size // get_event_size(op)
             if count * result_size < result_len:
                 raise Exception("Invalid result length")
-
-        # if req.result is not None:
-        #     wrote = result_len
-        #     ffi.memmove(req.result, result_ptr, wrote)
 
     req.result = result_ptr
     req.packet.data_size = result_len
@@ -167,7 +160,6 @@ class Client:
         data: ffi.CData,
         result_type: str,
     ) -> int:
-        print("sending request")
         if count == 0:
             raise errors.EmptyBatchError()
 
@@ -180,7 +172,6 @@ class Client:
             result=None,
             ready=threading.Event(),
         )
-        print("request", req)
         status = lib.tb_client_acquire_packet(
             self._tb_client[0],
             ffi.new("tb_packet_t * *", req.packet),
@@ -191,8 +182,6 @@ class Client:
             raise errors.ClientClosedError()
         if req.packet is None:
             raise errors.TigerBeetleError("Unexpected None packet")
-
-        print("status", status)
 
         req.packet.user_data = ffi.cast("void *", req.id)
         req.packet.operation = ffi.cast("TB_OPERATION", op.value)
@@ -209,6 +198,7 @@ class Client:
         req.ready.wait()
 
         # Release packet for other threads to use
+        # TODO: probably better to make a contextmanager for this
         lib.tb_client_release_packet(self._tb_client[0], req.packet)
 
         status = int(ffi.cast("TB_PACKET_STATUS", req.packet.status))
@@ -229,12 +219,10 @@ class Client:
                     )
 
         # Return the amount of bytes written into result
-        # return int(req.packet.data_size)
         result_count = req.packet.data_size // get_result_size(op)
         return ffi.cast(result_type.format(count=result_count), req.result)
 
     def close(self) -> None:
-        print("closing client")
         if self._tb_client is not None:
             lib.tb_client_deinit(self._tb_client[0])
             self._tb_client = None
@@ -323,7 +311,6 @@ class Client:
             "tb_create_transfers_result_t[{count}]",
         )
         results_by_idx = {result.index: result for result in results}
-        print("results", results)
 
         return [
             bindings.CreateTransfersResult(
@@ -351,8 +338,6 @@ class Client:
             List of account dictionaries.
         """
         count = len(account_ids)
-        # results = ffi.new("tb_account_t[]", count)
-
         batch = ffi.new("tb_uint128_t[]", [i.tuple for i in account_ids])
 
         results = self._do_request(
@@ -361,10 +346,7 @@ class Client:
             batch,
             "tb_account_t[{count}]",
         )
-        # print("wrote", wrote)
-        print("results", results)
 
-        # result_count = wrote // int(ffi.sizeof("tb_account_t"))
         return [
             bindings.Account(
                 id=cint128_to_int(result.id),
@@ -397,8 +379,6 @@ class Client:
             List of transfer dictionaries.
         """
         count = len(transfer_ids)
-        # results = ffi.new("tb_transfer_t[]", count)
-
         batch = ffi.new("tb_uint128_t[]", [i.tuple for i in transfer_ids])
 
         results = self._do_request(
@@ -407,11 +387,7 @@ class Client:
             batch,
             "tb_transfer_t[{count}]",
         )
-        print("results", results)
 
-        # print("wrote", wrote)
-
-        # result_count = wrote // int(ffi.sizeof("tb_transfer_t"))
         return [
             bindings.Transfer(
                 id=cint128_to_int(result.id),
@@ -443,10 +419,7 @@ class Client:
         Returns:
             List of transfers.
         """
-        # NOTE: isn't limit required and we can use that?
         count = sum(_filter.limit for _filter in filters)
-        # results = ffi.new("tb_transfer_t[]", count)
-
         batch = ffi.new("tb_account_filter_t[]", count)
 
         for idx, filter in enumerate(filters):
@@ -462,11 +435,7 @@ class Client:
             batch,
             "tb_transfer_t[{count}]",
         )
-        print("results", results)
 
-        # print("wrote", wrote)
-
-        # result_count = wrote // int(ffi.sizeof("tb_transfer_t"))
         return [
             bindings.Transfer(
                 id=cint128_to_int(result.id),
@@ -499,7 +468,6 @@ class Client:
             List of account balances.
         """
         count = sum(_filter.limit for _filter in filters)
-        # results = ffi.new("tb_account_balance_t[]", count)
 
         batch = ffi.new("tb_account_filter_t[]", count)
         for idx, filter in enumerate(filters):
@@ -515,11 +483,7 @@ class Client:
             batch,
             "tb_account_balance_t[{count}]",
         )
-        print("results", results)
 
-        # print("wrote", wrote)
-
-        # result_count = wrote // int(ffi.sizeof("tb_account_balance_t"))
         return [
             bindings.AccountBalance(
                 debits_pending=cint128_to_int(result.debits_pending),
