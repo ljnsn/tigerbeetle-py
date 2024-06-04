@@ -419,11 +419,11 @@ class Client:
         Returns:
             List of transfers.
         """
-        count = sum(_filter.limit for _filter in filters)
+        count = sum(_filter.limit for _filter in filters).int
         batch = ffi.new("tb_account_filter_t[]", count)
 
         for idx, filter in enumerate(filters):
-            batch[idx].account_id = filter.id.tuple
+            batch[idx].account_id = filter.account_id.tuple
             batch[idx].timestamp_min = filter.timestamp_min.int
             batch[idx].timestamp_max = filter.timestamp_max.int
             batch[idx].limit = filter.limit.int
@@ -467,11 +467,11 @@ class Client:
         Returns:
             List of account balances.
         """
-        count = sum(_filter.limit for _filter in filters)
-
+        count = sum(_filter.limit for _filter in filters).int
         batch = ffi.new("tb_account_filter_t[]", count)
+
         for idx, filter in enumerate(filters):
-            batch[idx].account_id = filter.id.tuple
+            batch[idx].account_id = filter.account_id.tuple
             batch[idx].timestamp_min = filter.timestamp_min.int
             batch[idx].timestamp_max = filter.timestamp_max.int
             batch[idx].limit = filter.limit.int
