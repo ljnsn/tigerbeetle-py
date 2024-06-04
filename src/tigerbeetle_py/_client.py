@@ -421,29 +421,27 @@ class Client:
 
     def get_account_transfers(
         self,
-        filters: list[bindings.AccountFilter],
+        filt: bindings.AccountFilter,
     ) -> list[bindings.Transfer]:
         """Get transfers for an account.
 
         Args:
-            filters: List of account filters.
+            filt: The query filter.
 
         Returns:
             List of transfers.
         """
-        count = len(filters)
-        batch = ffi.new("tb_account_filter_t[]", count)
+        batch = ffi.new("tb_account_filter_t[]", 1)
 
-        for idx, filter in enumerate(filters):
-            batch[idx].account_id = filter.account_id.tuple
-            batch[idx].timestamp_min = filter.timestamp_min.int
-            batch[idx].timestamp_max = filter.timestamp_max.int
-            batch[idx].limit = filter.limit.int
-            batch[idx].flags = filter.flags.int
+        batch[0].account_id = filt.account_id.tuple
+        batch[0].timestamp_min = filt.timestamp_min.int
+        batch[0].timestamp_max = filt.timestamp_max.int
+        batch[0].limit = filt.limit.int
+        batch[0].flags = filt.flags.int
 
         results = self._do_request(
             bindings.Operation.GET_ACCOUNT_TRANSFERS,
-            count,
+            1,
             batch,
             "tb_transfer_t[{count}]",
         )
@@ -469,29 +467,27 @@ class Client:
 
     def get_account_balances(
         self,
-        filters: list[bindings.AccountFilter],
+        filt: bindings.AccountFilter,
     ) -> list[bindings.AccountBalance]:
         """Get balances for an account.
 
         Args:
-            filters: List of account filters.
+            filt: The query filter.
 
         Returns:
             List of account balances.
         """
-        count = len(filters)
-        batch = ffi.new("tb_account_filter_t[]", count)
+        batch = ffi.new("tb_account_filter_t[]", 1)
 
-        for idx, filter in enumerate(filters):
-            batch[idx].account_id = filter.account_id.tuple
-            batch[idx].timestamp_min = filter.timestamp_min.int
-            batch[idx].timestamp_max = filter.timestamp_max.int
-            batch[idx].limit = filter.limit.int
-            batch[idx].flags = filter.flags.int
+        batch[0].account_id = filt.account_id.tuple
+        batch[0].timestamp_min = filt.timestamp_min.int
+        batch[0].timestamp_max = filt.timestamp_max.int
+        batch[0].limit = filt.limit.int
+        batch[0].flags = filt.flags.int
 
         results = self._do_request(
             bindings.Operation.GET_ACCOUNT_BALANCES,
-            count,
+            1,
             batch,
             "tb_account_balance_t[{count}]",
         )
