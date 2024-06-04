@@ -36,7 +36,7 @@ def transfer_b_id_ifx() -> uint128:
     return uid.ID()
 
 
-def test_test(tb_client: Client) -> None:
+def test_client(tb_client: Client) -> None:
     """Test the test method."""
     assert 1
 
@@ -243,3 +243,65 @@ def test_create_concurrent_transfers(
 
     assert account_a_debits_after == account_a_debits + transfers_max
     assert account_b_credits_after == account_b_credits + transfers_max
+
+
+def test_get_account_balances(tb_client: Client, account_a_id: uint128) -> None:
+    """Test getting account balances."""
+    account_a = bindings.Account(
+        account_a_id,
+        ledger=uint32(1),
+        code=uint16(1),
+        flags=bindings.AccountFlags(history=True).to_uint16(),
+    )
+    tb_client.create_accounts([account_a])
+
+    balances = tb_client.get_account_balances(
+        [bindings.AccountFilter(account_id=account_a_id)]
+    )
+
+    assert len(balances) == 1
+    assert balances[0].account_id == account_a_id
+    assert balances[0].ledger == 1
+    assert balances[0].code == 1
+    assert balances[0].debits_pending == 0
+    assert balances[0].debits_posted == 0
+    assert balances[0].credits_pending == 0
+    assert balances[0].credits_posted == 0
+    assert balances[0].timestamp != 0
+
+
+def test_get_account_transfers(
+    tb_client: Client,
+    account_a_id: uint128,
+    account_b_id: uint128,
+    transfer_a_id: uint128,
+    transfer_b_id: uint128,
+) -> None:
+    """Test getting account transfers."""
+    account_a = bindings.Account(account_a_id, ledger=uint32(1), code=uint16(1))
+    account_b = bindings.Account(account_b_id, ledger=uint32(1), code=uint16(2))
+    tb_client.create_accounts([account_a, account_b])
+
+    transfer_a = bindings.Transfer(
+        transfer_a_id,
+        debit_account_id=account_a_id,
+        credit_account_id=account_b_id,
+        amount=uint64(100),
+        ledger=uint32(1),
+        code=uint16(1),
+    )
+    transfer_b = bindings.Transfer(
+        transfer_a_id,
+        debit_account_id=account_a_id,
+        credit_account_id=account_b_id,
+        amount=uint64(100),
+        ledger=uint32(1),
+        code=uint16(1),
+    )
+    tb_client.create_transfers([transfer_a, transfer_b])
+
+    transfers = tb_client.get_account_transfers(
+        [bindings.AccountFilter(account_id=account_a_id)]
+    )
+
+    assert len(transfers) == 2
