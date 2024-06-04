@@ -2,6 +2,8 @@
 
 import threading
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from types import TracebackType
 from typing import ClassVar
@@ -105,6 +107,37 @@ def get_result_size(op: bindings.Operation) -> int:
     }.get(op, 0)
 
 
+@contextmanager
+def request_ctx(c: ffi.CData, packet: ffi.CData | None = None) -> Iterator[Request]:
+    if packet is None:
+        packet = ffi.new("tb_packet_t *")
+
+    status = lib.tb_client_acquire_packet(
+        c[0],
+        ffi.new("tb_packet_t * *", packet),
+    )
+    if status == lib.TB_STATUS_CONCURRENCY_MAX_INVALID:
+        raise errors.ConcurrencyExceededError()
+    if status == lib.TB_PACKET_ACQUIRE_SHUTDOWN:
+        raise errors.ClientClosedError()
+    if packet is None:
+        raise errors.TigerBeetleError("Unexpected None packet")
+
+    req = Request(
+        id=uuid.uuid4().int & 0x7FFFFFFF,
+        packet=packet,
+        result=None,
+        ready=threading.Event(),
+    )
+
+    try:
+        yield req
+    finally:
+        # Release packet for other threads to use
+        lib.tb_client_release_packet(c[0], packet)
+        del Client.inflight[req.id]
+
+
 # TODO: ensure endianness is correct
 class Client:
     """Client for TigerBeetle."""
@@ -166,61 +199,40 @@ class Client:
         if self._tb_client is None:
             raise errors.ClientClosedError()
 
-        req = Request(
-            id=uuid.uuid4().int & 0x7FFFFFFF,
-            packet=ffi.new("tb_packet_t *"),
-            result=None,
-            ready=threading.Event(),
-        )
-        status = lib.tb_client_acquire_packet(
-            self._tb_client[0],
-            ffi.new("tb_packet_t * *", req.packet),
-        )
-        if status == lib.TB_STATUS_CONCURRENCY_MAX_INVALID:
-            raise errors.ConcurrencyExceededError()
-        if status == lib.TB_PACKET_ACQUIRE_SHUTDOWN:
-            raise errors.ClientClosedError()
-        if req.packet is None:
-            raise errors.TigerBeetleError("Unexpected None packet")
+        with request_ctx(self._tb_client) as req:
+            req.packet.user_data = ffi.cast("void *", req.id)
+            req.packet.operation = ffi.cast("TB_OPERATION", op.value)
+            req.packet.status = lib.TB_PACKET_OK
+            req.packet.data_size = count * get_event_size(op)
+            req.packet.data = data
 
-        req.packet.user_data = ffi.cast("void *", req.id)
-        req.packet.operation = ffi.cast("TB_OPERATION", op.value)
-        req.packet.status = lib.TB_PACKET_OK
-        req.packet.data_size = count * get_event_size(op)
-        req.packet.data = data
+            Client.inflight[req.id] = req
 
-        Client.inflight[req.id] = req
+            # Submit the request.
+            lib.tb_client_submit(self._tb_client[0], req.packet)
 
-        # Submit the request.
-        lib.tb_client_submit(self._tb_client[0], req.packet)
+            # Wait for the response
+            req.ready.wait()
 
-        # Wait for the response
-        req.ready.wait()
+            status = int(ffi.cast("TB_PACKET_STATUS", req.packet.status))
+            if status != lib.TB_PACKET_OK:
+                match status:
+                    case lib.TB_PACKET_TOO_MUCH_DATA:
+                        raise errors.MaximumBatchSizeExceededError()
+                    case lib.TB_PACKET_INVALID_OPERATION:
+                        # we control what lib.TB_OPERATION is given
+                        # but allow an invalid opcode to be passed to emulate a client nop
+                        raise errors.InvalidOperationError()
+                    case lib.TB_PACKET_INVALID_DATA_SIZE:
+                        # we control what type of data is given
+                        raise Exception("unreachable")
+                    case _:
+                        raise Exception(
+                            "tb_client_submit(): returned packet with invalid status"
+                        )
 
-        # Release packet for other threads to use
-        # TODO: probably better to make a contextmanager for this
-        lib.tb_client_release_packet(self._tb_client[0], req.packet)
-
-        status = int(ffi.cast("TB_PACKET_STATUS", req.packet.status))
-        if status != lib.TB_PACKET_OK:
-            match status:
-                case lib.TB_PACKET_TOO_MUCH_DATA:
-                    raise errors.MaximumBatchSizeExceededError()
-                case lib.TB_PACKET_INVALID_OPERATION:
-                    # we control what lib.TB_OPERATION is given
-                    # but allow an invalid opcode to be passed to emulate a client nop
-                    raise errors.InvalidOperationError()
-                case lib.TB_PACKET_INVALID_DATA_SIZE:
-                    # we control what type of data is given
-                    raise Exception("unreachable")
-                case _:
-                    raise Exception(
-                        "tb_client_submit(): returned packet with invalid status"
-                    )
-
-        # Return the amount of bytes written into result
-        result_count = req.packet.data_size // get_result_size(op)
-        return ffi.cast(result_type.format(count=result_count), req.result)
+            result_count = req.packet.data_size // get_result_size(op)
+            return ffi.cast(result_type.format(count=result_count), req.result)
 
     def close(self) -> None:
         if self._tb_client is not None:
