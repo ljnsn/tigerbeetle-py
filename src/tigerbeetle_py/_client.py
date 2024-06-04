@@ -61,7 +61,7 @@ def _on_completion_fn(
     if req.packet != packet:
         raise Exception("Packet mismatch")
 
-    wrote = 0
+    # wrote = 0
     if result_len > 0 and result_ptr is not None:
         op = bindings.Operation(int(packet.operation))
         result_size = get_result_size(op)
@@ -77,11 +77,12 @@ def _on_completion_fn(
             if count * result_size < result_len:
                 raise Exception("Invalid result length")
 
-        if req.result is not None:
-            wrote = result_len
-            ffi.memmove(req.result, result_ptr, wrote)
+        # if req.result is not None:
+        #     wrote = result_len
+        #     ffi.memmove(req.result, result_ptr, wrote)
 
-    req.packet.data_size = wrote
+    req.result = result_ptr
+    req.packet.data_size = result_len
     req.ready.set()
 
 
@@ -164,7 +165,7 @@ class Client:
         op: bindings.Operation,
         count: int,
         data: ffi.CData,
-        result: ffi.CData,
+        result_type: str,
     ) -> int:
         print("sending request")
         if count == 0:
@@ -176,7 +177,7 @@ class Client:
         req = Request(
             id=uuid.uuid4().int & 0x7FFFFFFF,
             packet=ffi.new("tb_packet_t *"),
-            result=result,
+            result=None,
             ready=threading.Event(),
         )
         print("request", req)
@@ -228,7 +229,9 @@ class Client:
                     )
 
         # Return the amount of bytes written into result
-        return int(req.packet.data_size)
+        # return int(req.packet.data_size)
+        result_count = req.packet.data_size // get_result_size(op)
+        return ffi.cast(result_type.format(count=result_count), req.result)
 
     def close(self) -> None:
         print("closing client")
@@ -249,7 +252,6 @@ class Client:
             List of account creation results.
         """
         count = len(accounts)
-        results = ffi.new("tb_create_accounts_result_t[]", count)
 
         batch = ffi.new("tb_account_t[]", count)
         for idx, account in enumerate(accounts):
@@ -262,21 +264,25 @@ class Client:
             batch[idx].user_data_32 = account.user_data_32.int
             batch[idx].timestamp = 0
 
-        wrote = self._do_request(
+        results = self._do_request(
             bindings.Operation.CREATE_ACCOUNTS,
             count,
             batch,
-            results,
+            "tb_create_accounts_result_t[{count}]",
         )
-        print("wrote", wrote)
+        results_by_idx = {result.index: result for result in results}
 
-        # result_count = wrote // int(ffi.sizeof("tb_create_accounts_result_t"))
         return [
             bindings.CreateAccountsResult(
-                result.index,
-                bindings.CreateAccountResult(result.result),
+                results_by_idx[idx].index,
+                bindings.CreateAccountResult(results_by_idx[idx].result),
             )
-            for result in results
+            if idx in results_by_idx
+            else bindings.CreateAccountsResult(
+                idx,
+                bindings.CreateAccountResult(bindings.CreateAccountResult.OK),
+            )
+            for idx in range(count)
         ]
 
     def create_transfers(
@@ -292,7 +298,7 @@ class Client:
             List of transfer creation results.
         """
         count = len(transfers)
-        results = ffi.new("tb_create_transfers_result_t[]", count)
+        # results = ffi.new("tb_create_transfers_result_t[]", count)
 
         batch = ffi.new("tb_transfer_t[]", count)
         for idx, transfer in enumerate(transfers):
@@ -310,21 +316,26 @@ class Client:
             batch[idx].flags = transfer.flags.int
             batch[idx].timestamp = 0
 
-        wrote = self._do_request(
+        results = self._do_request(
             bindings.Operation.CREATE_TRANSFERS,
             count,
             batch,
-            results,
+            "tb_create_transfers_result_t[{count}]",
         )
-        print("wrote", wrote)
+        results_by_idx = {result.index: result for result in results}
+        print("results", results)
 
-        # result_count = wrote // int(ffi.sizeof("tb_create_transfers_result_t"))
         return [
             bindings.CreateTransfersResult(
-                result.index,
-                bindings.CreateTransferResult(result.result),
+                results_by_idx[idx].index,
+                bindings.CreateTransferResult(results_by_idx[idx].result),
             )
-            for result in results
+            if idx in results_by_idx
+            else bindings.CreateTransfersResult(
+                idx,
+                bindings.CreateTransferResult(bindings.CreateTransferResult.OK),
+            )
+            for idx in range(count)
         ]
 
     def lookup_accounts(
@@ -340,19 +351,20 @@ class Client:
             List of account dictionaries.
         """
         count = len(account_ids)
-        results = ffi.new("tb_account_t[]", count)
+        # results = ffi.new("tb_account_t[]", count)
 
         batch = ffi.new("tb_uint128_t[]", [i.tuple for i in account_ids])
 
-        wrote = self._do_request(
+        results = self._do_request(
             bindings.Operation.LOOKUP_ACCOUNTS,
             count,
             batch,
-            results,
+            "tb_account_t[{count}]",
         )
-        print("wrote", wrote)
+        # print("wrote", wrote)
+        print("results", results)
 
-        result_count = wrote // int(ffi.sizeof("tb_account_t"))
+        # result_count = wrote // int(ffi.sizeof("tb_account_t"))
         return [
             bindings.Account(
                 id=cint128_to_int(result.id),
@@ -369,7 +381,7 @@ class Client:
                 timestamp=uint.UInt64(result.timestamp),
                 reserved=result.reserved,
             )
-            for result in results[0:result_count]
+            for result in results
         ]
 
     def lookup_transfers(
@@ -385,20 +397,21 @@ class Client:
             List of transfer dictionaries.
         """
         count = len(transfer_ids)
-        results = ffi.new("tb_transfer_t[]", count)
+        # results = ffi.new("tb_transfer_t[]", count)
 
         batch = ffi.new("tb_uint128_t[]", [i.tuple for i in transfer_ids])
 
-        wrote = self._do_request(
+        results = self._do_request(
             bindings.Operation.LOOKUP_TRANSFERS,
             count,
             batch,
-            results,
+            "tb_transfer_t[{count}]",
         )
+        print("results", results)
 
-        print("wrote", wrote)
+        # print("wrote", wrote)
 
-        result_count = wrote // int(ffi.sizeof("tb_transfer_t"))
+        # result_count = wrote // int(ffi.sizeof("tb_transfer_t"))
         return [
             bindings.Transfer(
                 id=cint128_to_int(result.id),
@@ -415,7 +428,7 @@ class Client:
                 flags=uint.UInt16(result.flags),
                 timestamp=uint.UInt64(result.timestamp),
             )
-            for result in results[0:result_count]
+            for result in results
         ]
 
     def get_account_transfers(
@@ -432,7 +445,7 @@ class Client:
         """
         # NOTE: isn't limit required and we can use that?
         count = sum(_filter.limit for _filter in filters)
-        results = ffi.new("tb_transfer_t[]", count)
+        # results = ffi.new("tb_transfer_t[]", count)
 
         batch = ffi.new("tb_account_filter_t[]", count)
 
@@ -443,16 +456,17 @@ class Client:
             batch[idx].limit = filter.limit.int
             batch[idx].flags = filter.flags.int
 
-        wrote = self._do_request(
+        results = self._do_request(
             bindings.Operation.GET_ACCOUNT_TRANSFERS,
             count,
             batch,
-            results,
+            "tb_transfer_t[{count}]",
         )
+        print("results", results)
 
-        print("wrote", wrote)
+        # print("wrote", wrote)
 
-        result_count = wrote // int(ffi.sizeof("tb_transfer_t"))
+        # result_count = wrote // int(ffi.sizeof("tb_transfer_t"))
         return [
             bindings.Transfer(
                 id=cint128_to_int(result.id),
@@ -469,7 +483,7 @@ class Client:
                 flags=uint.UInt16(result.flags),
                 timestamp=uint.UInt64(result.timestamp),
             )
-            for result in results[0:result_count]
+            for result in results
         ]
 
     def get_account_balances(
@@ -485,7 +499,7 @@ class Client:
             List of account balances.
         """
         count = sum(_filter.limit for _filter in filters)
-        results = ffi.new("tb_account_balance_t[]", count)
+        # results = ffi.new("tb_account_balance_t[]", count)
 
         batch = ffi.new("tb_account_filter_t[]", count)
         for idx, filter in enumerate(filters):
@@ -495,16 +509,17 @@ class Client:
             batch[idx].limit = filter.limit.int
             batch[idx].flags = filter.flags.int
 
-        wrote = self._do_request(
+        results = self._do_request(
             bindings.Operation.GET_ACCOUNT_BALANCES,
             count,
             batch,
-            results,
+            "tb_account_balance_t[{count}]",
         )
+        print("results", results)
 
-        print("wrote", wrote)
+        # print("wrote", wrote)
 
-        result_count = wrote // int(ffi.sizeof("tb_account_balance_t"))
+        # result_count = wrote // int(ffi.sizeof("tb_account_balance_t"))
         return [
             bindings.AccountBalance(
                 debits_pending=cint128_to_int(result.debits_pending),
@@ -513,5 +528,5 @@ class Client:
                 credits_posted=cint128_to_int(result.credits_posted),
                 timestamp=uint.UInt64(result.timestamp),
             )
-            for result in results[0:result_count]
+            for result in results
         ]
