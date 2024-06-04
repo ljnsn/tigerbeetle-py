@@ -245,7 +245,12 @@ def test_create_concurrent_transfers(
     assert account_b_credits_after == account_b_credits + transfers_max
 
 
-def test_get_account_balances(tb_client: Client, account_a_id: uint128) -> None:
+def test_get_account_balances(
+    tb_client: Client,
+    account_a_id: uint128,
+    account_b_id: uint128,
+    transfer_a_id: uint128,
+) -> None:
     """Test getting account balances."""
     account_a = bindings.Account(
         account_a_id,
@@ -253,21 +258,32 @@ def test_get_account_balances(tb_client: Client, account_a_id: uint128) -> None:
         code=uint16(1),
         flags=bindings.AccountFlags(history=True).to_uint16(),
     )
-    tb_client.create_accounts([account_a])
+    account_b = bindings.Account(account_b_id, ledger=uint32(1), code=uint16(2))
+    tb_client.create_accounts([account_a, account_b])
+
+    transfer_a = bindings.Transfer(
+        transfer_a_id,
+        debit_account_id=account_a_id,
+        credit_account_id=account_b_id,
+        amount=uint64(100),
+        ledger=uint32(1),
+        code=uint16(1),
+    )
+    tb_client.create_transfers([transfer_a])
 
     balances = tb_client.get_account_balances(
-        [bindings.AccountFilter(account_id=account_a_id)]
+        bindings.AccountFilter(account_id=account_a_id)
     )
 
     assert len(balances) == 1
-    assert balances[0].account_id == account_a_id
-    assert balances[0].ledger == 1
-    assert balances[0].code == 1
-    assert balances[0].debits_pending == 0
-    assert balances[0].debits_posted == 0
-    assert balances[0].credits_pending == 0
-    assert balances[0].credits_posted == 0
-    assert balances[0].timestamp != 0
+
+    balance = balances[0]
+    assert isinstance(balance, bindings.AccountBalance)
+    assert balance.debits_pending == 0
+    assert balance.debits_posted == 100
+    assert balance.credits_pending == 0
+    assert balance.credits_posted == 0
+    assert balance.timestamp != 0
 
 
 def test_get_account_transfers(
@@ -291,9 +307,9 @@ def test_get_account_transfers(
         code=uint16(1),
     )
     transfer_b = bindings.Transfer(
-        transfer_a_id,
-        debit_account_id=account_a_id,
-        credit_account_id=account_b_id,
+        transfer_b_id,
+        debit_account_id=account_b_id,
+        credit_account_id=account_a_id,
         amount=uint64(100),
         ledger=uint32(1),
         code=uint16(1),
@@ -301,7 +317,39 @@ def test_get_account_transfers(
     tb_client.create_transfers([transfer_a, transfer_b])
 
     transfers = tb_client.get_account_transfers(
-        [bindings.AccountFilter(account_id=account_a_id)]
+        bindings.AccountFilter(account_id=account_a_id)
     )
 
     assert len(transfers) == 2
+
+    transfer_a = transfers[0]
+    assert isinstance(transfer_a, bindings.Transfer)
+    assert transfer_a.id == transfer_a_id
+    assert transfer_a.debit_account_id == account_a_id
+    assert transfer_a.credit_account_id == account_b_id
+    assert transfer_a.amount == 100
+    assert transfer_a.ledger == 1
+    assert transfer_a.code == 1
+    assert transfer_a.pending_id == 0
+    assert transfer_a.user_data_128 == 0
+    assert transfer_a.user_data_64 == 0
+    assert transfer_a.user_data_32 == 0
+    assert transfer_a.timeout == 0
+    assert transfer_a.flags == 0
+    assert transfer_a.timestamp != 0
+
+    transfer_b = transfers[1]
+    assert isinstance(transfer_b, bindings.Transfer)
+    assert transfer_b.id == transfer_b_id
+    assert transfer_b.debit_account_id == account_b_id
+    assert transfer_b.credit_account_id == account_a_id
+    assert transfer_b.amount == 100
+    assert transfer_b.ledger == 1
+    assert transfer_b.code == 1
+    assert transfer_b.pending_id == 0
+    assert transfer_b.user_data_128 == 0
+    assert transfer_b.user_data_64 == 0
+    assert transfer_b.user_data_32 == 0
+    assert transfer_b.timeout == 0
+    assert transfer_b.flags == 0
+    assert transfer_b.timestamp != 0
