@@ -431,7 +431,7 @@ class Client:
         Returns:
             List of transfers.
         """
-        count = sum(_filter.limit for _filter in filters).int
+        count = len(filters)
         batch = ffi.new("tb_account_filter_t[]", count)
 
         for idx, filter in enumerate(filters):
@@ -479,7 +479,7 @@ class Client:
         Returns:
             List of account balances.
         """
-        count = sum(_filter.limit for _filter in filters).int
+        count = len(filters)
         batch = ffi.new("tb_account_filter_t[]", count)
 
         for idx, filter in enumerate(filters):
