@@ -62,9 +62,9 @@ class TransferFlags:
 class AccountFilterFlags:
     """See [AccountFilterFlags](https://docs.tigerbeetle.com/reference/account-filter#flags)"""
 
-    debits: bool = False
+    debits: bool = True
     """See [debits](https://docs.tigerbeetle.com/reference/account-filter#flagsdebits)"""
-    credits: bool = False
+    credits: bool = True
     """See [credits](https://docs.tigerbeetle.com/reference/account-filter#flagscredits)"""
     reversed: bool = False
     """See [reversed](https://docs.tigerbeetle.com/reference/account-filter#flagsreversed)"""
