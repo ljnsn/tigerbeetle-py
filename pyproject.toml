@@ -3,7 +3,7 @@ name = "tigerbeetle-py"
 version = "0.1.0"
 description = "TigerBeetle Python Client"
 authors = [{ name = "ljnsn", email = "info@ljnsn.com" }]
-license = { text = "Apache-2.0" }
+license = { file = "LICENSE" }
 requires-python = "<4.0,>=3.10"
 dependencies = ["cffi>=1.16.0"]
 
