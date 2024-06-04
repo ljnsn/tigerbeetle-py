@@ -8,13 +8,13 @@ description = "TigerBeetle Python Client"
 
 [tool.pdm.dev-dependencies]
 dev = [
-  "ipdb>=0.13.13",
-  "ruff>=0.4.6",
   "commitizen>=3.27.0",
   "cz-conventional-gitmoji>=0.3.2",
+  "ipdb>=0.13.13",
   "ipython!=8.18.0",
+  "ruff>=0.4.6",
 ]
-test = ["pytest>=8.2.1", "coverage>=7.5.3"]
+test = ["pytest>=8.2.1", "coverage>=7.5.3", "pytest-cov>=5.0.0"]
 
 [tool.pdm]
 distribution = true
@@ -24,7 +24,60 @@ package-dir = "src"
 run-setuptools = true
 source-includes = ["build.py"]
 
+[tool.pdm.scripts]
+lint = "pre-commit run --all-files"
+test = { composite = ["coverage run", "coverage report", "coverage xml"] }
+# test = { composite = ["pytest tests/unit", "pytest tests/integration"] }
+
+[tool.commitizen]
+name = "cz_gitmoji"
+version_provider = "pep621"
+tag_format = "v$version"
+bump_message = "🔖 bump(release): v$current_version → v$new_version"
+update_changelog_on_bump = true
+
+[tool.coverage.run]
+branch = true
+command_line = "--module pytest"
+data_file = "reports/.coverage"
+source = ["src"]
+
+[tool.coverage.report]
+fail_under = 50
+precision = 1
+show_missing = true
+skip_covered = true
+
+[tool.coverage.xml]
+output = "reports/coverage.xml"
+
+[tool.ruff]
+fix = true
+target-version = "py312"
+src = ["src"]
+
+[tool.ruff.lint]
+logger-objects = ["loguru"]
+unfixable = ["ERA001", "F401", "F841"]
+
+[tool.ruff.format]
+line-ending = "lf"
+indent-style = "space"
+
+[tool.ruff.lint.isort]
+known-first-party = ["tigerbeetle_py", "tests"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
 [tool.pytest.ini_options]
+addopts = """--color=yes --doctest-modules --exitfirst --failed-first \
+  --strict-markers --strict-config --verbosity=2 \
+  --junitxml=reports/pytest.xml"""
+testpaths = ["src", "tests"]
 markers = ["slow: mark test as slow"]
 
 
