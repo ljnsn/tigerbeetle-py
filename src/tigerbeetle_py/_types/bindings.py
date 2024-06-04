@@ -352,7 +352,7 @@ class AccountFilter:
     """See [timestamp_min](https://docs.tigerbeetle.com/reference/account-filter#timestamp_min)"""
     timestamp_max: uint.UInt64 = uint.UInt64(0)
     """See [timestamp_max](https://docs.tigerbeetle.com/reference/account-filter#timestamp_max)"""
-    limit: uint.UInt32 = uint.UInt32(100)
+    limit: uint.UInt32 = uint.UInt32(8190)
     """See [limit](https://docs.tigerbeetle.com/reference/account-filter#limit)"""
     flags: uint.UInt32 = AccountFilterFlags().to_uint32()
     """See [flags](https://docs.tigerbeetle.com/reference/account-filter#flags)"""
